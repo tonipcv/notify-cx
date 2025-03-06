@@ -38,17 +38,24 @@ const firebaseConfigPath = process.env.NODE_ENV === 'production'
   ? '/firebase-service-account.json'
   : path.join(__dirname, 'firebase-service-account.json');
 
-// Verificar se o arquivo de chave APNs existe
+// Verificar se o arquivo de chave APNs existe ou se temos a chave como variável de ambiente
 const keyPath = process.env.NODE_ENV === 'production' 
   ? '/AuthKey_2B7PM6X757.p8'
   : path.join(__dirname, 'AuthKey_2B7PM6X757.p8');
 
-if (!fs.existsSync(keyPath)) {
-  console.error(`❌ Arquivo de chave APNs não encontrado em: ${keyPath}`);
+let apnsKeyContent = null;
+
+// Verificar se temos a chave como variável de ambiente
+if (process.env.APNS_KEY_CONTENT) {
+  console.log('✅ Usando chave APNs da variável de ambiente APNS_KEY_CONTENT');
+  apnsKeyContent = process.env.APNS_KEY_CONTENT;
+} else if (fs.existsSync(keyPath)) {
+  console.log(`✅ Arquivo de chave APNs encontrado em: ${keyPath}`);
+  apnsKeyContent = fs.readFileSync(keyPath, 'utf8');
+} else {
+  console.error(`❌ Arquivo de chave APNs não encontrado em: ${keyPath} e variável APNS_KEY_CONTENT não definida`);
   process.exit(1);
 }
-
-console.log(`✅ Arquivo de chave APNs encontrado em: ${keyPath}`);
 
 // Inicializar o Firebase Admin SDK
 try {
@@ -89,9 +96,7 @@ try {
 // Configuração do provedor APNs
 const apnProvider = new apn.Provider({
   token: {
-    key: process.env.NODE_ENV === 'production' 
-      ? '/AuthKey_2B7PM6X757.p8'
-      : path.join(__dirname, 'AuthKey_2B7PM6X757.p8'),
+    key: apnsKeyContent,
     keyId: process.env.APNS_KEY_ID,
     teamId: process.env.APNS_TEAM_ID,
   },
