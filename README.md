@@ -127,3 +127,39 @@ O sistema inclui um Dockerfile para facilitar a implantação. Para construir e 
 docker build -t telegram-fcm-notifications .
 docker run -p 3000:3000 --env-file .env telegram-fcm-notifications
 ```
+
+## Implantação no Easypanel
+
+Para implantar este aplicativo no Easypanel, siga estas etapas:
+
+1. **Preparação dos arquivos**:
+   - Certifique-se de que o arquivo `AuthKey_2B7PM6X757.p8` (chave APNs) está na raiz do projeto
+   - Se estiver usando o arquivo de credenciais do Firebase, certifique-se de que `firebase-service-account.json` está na raiz do projeto
+   - Crie um arquivo `.env.production` baseado no arquivo `.env.production.example`
+
+2. **No Easypanel**:
+   - Crie um novo projeto
+   - Selecione "Custom" como tipo de projeto
+   - Configure o projeto com as seguintes opções:
+     - **Repository URL**: URL do seu repositório Git (ex: https://github.com/tonipcv/ios-notification-server-fip.git)
+     - **Branch**: main (ou a branch que contém seu código)
+     - **Dockerfile Path**: ./Dockerfile
+     - **Container Port**: 3000
+     - **Environment Variables**: Configure todas as variáveis necessárias conforme o arquivo `.env.production.example`
+
+3. **Configuração do Banco de Dados**:
+   - Crie um serviço PostgreSQL no Easypanel
+   - Configure a variável `DATABASE_URL` para apontar para este banco de dados
+   - Formato: `postgresql://usuario:senha@nome-do-servico-postgres:5432/nome_do_banco`
+
+4. **Configuração do Domínio**:
+   - Configure um domínio para seu aplicativo no Easypanel
+   - Atualize a variável `WEBHOOK_URL` para usar este domínio (ex: `https://seu-dominio.com/telegram-webhook`)
+
+5. **Arquivos de Credenciais**:
+   - Se você estiver usando o arquivo `firebase-service-account.json`, certifique-se de que ele está incluído no repositório ou configure as variáveis de ambiente correspondentes
+   - Certifique-se de que o arquivo `AuthKey_2B7PM6X757.p8` está incluído no repositório
+
+6. **Após a implantação**:
+   - Acesse a rota `/setup-webhook` para configurar o webhook do Telegram
+   - Verifique os logs para garantir que tudo está funcionando corretamente
