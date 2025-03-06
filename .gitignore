@@ -1,0 +1,5 @@
+.env
+.env.production
+node_modules/ firebase-service-account.json
+AuthKey_2B7PM6X757.p8
+firebase-service-account.json
