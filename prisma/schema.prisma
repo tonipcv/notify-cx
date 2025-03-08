@@ -8,9 +8,13 @@ datasource db {
 }
 
 model DeviceToken {
-  id           String   @id @default(uuid())
-  deviceToken  String   @unique
-  userId       String   @default("anônimo")
-  platform     String   @default("ios")
-  registeredAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  deviceToken String   @unique
+  userId      String   @default("anônimo")
+  platform    String   @default("ios")
+  deviceInfo  Json?    // Para armazenar informações adicionais do dispositivo
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
