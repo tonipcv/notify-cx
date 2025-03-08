@@ -14,7 +14,7 @@ export default function Home() {
     setResult(null)
 
     try {
-      const response = await fetch('http://localhost:3000/send-notification', {
+      const response = await fetch('https://boop-notify-ios-ft.dpbdp1.easypanel.host/send-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
