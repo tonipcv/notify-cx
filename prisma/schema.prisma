@@ -12,7 +12,6 @@ model DeviceToken {
   deviceToken String   @unique
   userId      String   @default("anônimo")
   platform    String   @default("ios")
-  deviceInfo  Json?    // Para armazenar informações adicionais do dispositivo
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
 

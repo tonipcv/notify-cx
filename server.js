@@ -126,49 +126,55 @@ app.post('/register-device', async (req, res) => {
   console.log('Headers recebidos:', req.headers);
   console.log('Body completo:', JSON.stringify(req.body, null, 2));
   
-  const { deviceToken, userId, platform, deviceInfo } = req.body;
+  // Extrair dados do body
+  const { deviceToken, userId, platform } = req.body;
   
+  // Verificar token
   if (!deviceToken) {
     console.log('❌ Erro: Device token não fornecido');
-    return res.status(400).json({ error: 'Device token é obrigatório' });
+    return res.status(400).json({ 
+      error: 'Device token é obrigatório',
+      receivedPayload: req.body 
+    });
   }
 
-  console.log(`📱 Registrando dispositivo:
-    Token: ${deviceToken}
-    Usuário: ${userId || 'anônimo'}
-    Plataforma: ${platform || 'ios'}
-    Device Info: ${JSON.stringify(deviceInfo || {})}`);
-  
   try {
+    // Log detalhado dos dados recebidos
+    console.log(`📱 Registrando dispositivo:
+      Token: ${deviceToken}
+      Usuário: ${userId || 'anônimo'}
+      Plataforma: ${platform || 'ios'}`);
+
     // Armazena o token no banco de dados
     const result = await prisma.deviceToken.upsert({
-      where: { deviceToken },
+      where: { 
+        deviceToken: deviceToken 
+      },
       update: {
         userId: userId || 'anônimo',
         platform: platform || 'ios',
-        deviceInfo: deviceInfo || {},
         lastUpdated: new Date()
       },
       create: {
-        deviceToken,
+        deviceToken: deviceToken,
         userId: userId || 'anônimo',
-        platform: platform || 'ios',
-        deviceInfo: deviceInfo || {},
+        platform: platform || 'ios'
       }
     });
     
     console.log('✅ Dispositivo registrado com sucesso:', result);
-    res.json({ success: true, message: 'Dispositivo registrado com sucesso', data: result });
+    res.json({ 
+      success: true, 
+      message: 'Dispositivo registrado com sucesso', 
+      data: result 
+    });
+
   } catch (error) {
     console.error('❌ Erro ao registrar dispositivo:', error);
-    console.error('Stack trace:', error.stack);
     res.status(500).json({ 
       error: 'Erro ao registrar dispositivo',
-      details: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: error.message
     });
-  } finally {
-    console.log('=== FIM DO REGISTRO DE DISPOSITIVO ===\n');
   }
 });
 
