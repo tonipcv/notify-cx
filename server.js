@@ -73,6 +73,17 @@ try {
   process.exit(1);
 }
 
+// Configurar CORS para o painel de notificações
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -83,6 +94,28 @@ app.get('/health', (req, res) => {
     server: 'running',
     database: 'connected'
   });
+});
+
+// Rota para receber notificações do painel
+app.post('/send-notification', async (req, res) => {
+  try {
+    const { title, message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Mensagem é obrigatória' });
+    }
+
+    console.log('🔔 Enviando notificação personalizada...');
+    console.log(`📝 Título: ${title}`);
+    console.log(`📝 Mensagem: ${message}`);
+
+    await sendFirebaseNotification(message, 'Painel');
+
+    res.json({ success: true, message: 'Notificação enviada com sucesso' });
+  } catch (error) {
+    console.error('❌ Erro ao enviar notificação:', error);
+    res.status(500).json({ error: 'Erro ao enviar notificação' });
+  }
 });
 
 // 1. Rota principal para teste
@@ -150,9 +183,6 @@ app.post('/register-device', async (req, res) => {
 
 // 3. Rota Webhook do Telegram
 app.post('/telegram-webhook', async (req, res) => {
-  // Enviar resposta imediatamente para o Telegram
-  res.sendStatus(200);
-  
   console.log('\n Telegram Webhook Acionado');
   console.log('Timestamp:', new Date().toISOString());
   console.log('URL completa:', req.protocol + '://' + req.get('host') + req.originalUrl);
@@ -182,10 +212,12 @@ app.post('/telegram-webhook', async (req, res) => {
 
     // Log da resposta
     console.log('✅ Enviando resposta 200 para o Telegram');
+    res.sendStatus(200);
   } catch (error) {
     console.error('❌ Erro no processamento do webhook:', error);
     console.error('Stack trace:', error.stack);
     console.error('Request body:', req.body);
+    res.sendStatus(500);
   }
 });
 
