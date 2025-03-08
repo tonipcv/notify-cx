@@ -109,7 +109,7 @@ app.post('/send-notification', async (req, res) => {
     console.log(`📝 Título: ${title}`);
     console.log(`📝 Mensagem: ${message}`);
 
-    await sendFirebaseNotification(message, 'Painel');
+    await sendFirebaseNotification(message, 'Painel', title);
 
     res.json({ success: true, message: 'Notificação enviada com sucesso' });
   } catch (error) {
@@ -272,7 +272,7 @@ app.get('/setup-webhook', async (req, res) => {
 });
 
 // 5. Função para enviar notificação via Firebase
-async function sendFirebaseNotification(messageText, senderName) {
+async function sendFirebaseNotification(messageText, senderName, customTitle = null) {
   try {
     // Buscar tokens no banco de dados
     const devices = await prisma.deviceToken.findMany();
@@ -288,12 +288,13 @@ async function sendFirebaseNotification(messageText, senderName) {
     // Preparar a mensagem
     const message = {
       notification: {
-        title: 'Futuros Tech',
-        body: 'Novo sinal de entrada, caso seja Premium abra para ver!'
+        title: customTitle || 'Futuros Tech',
+        body: senderName === 'Painel' ? messageText : 'Novo sinal de entrada, caso seja Premium abra para ver!'
       },
       data: {
         sender: senderName,
-        messageType: 'telegram',
+        messageType: senderName === 'Painel' ? 'custom' : 'telegram',
+        message: messageText,
         timestamp: new Date().toISOString()
       },
       android: {
