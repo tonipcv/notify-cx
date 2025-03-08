@@ -6,7 +6,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import admin from 'firebase-admin';
-import apn from 'apn';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,25 +36,6 @@ const DEBUG = true;
 const firebaseConfigPath = process.env.NODE_ENV === 'production' 
   ? '/firebase-service-account.json'
   : path.join(__dirname, 'firebase-service-account.json');
-
-// Verificar se o arquivo de chave APNs existe ou se temos a chave como variável de ambiente
-const keyPath = process.env.NODE_ENV === 'production' 
-  ? '/AuthKey_2B7PM6X757.p8'
-  : path.join(__dirname, 'AuthKey_2B7PM6X757.p8');
-
-let apnsKeyContent = null;
-
-// Verificar se temos a chave como variável de ambiente
-if (process.env.APNS_KEY_CONTENT) {
-  console.log('✅ Usando chave APNs da variável de ambiente APNS_KEY_CONTENT');
-  apnsKeyContent = process.env.APNS_KEY_CONTENT;
-} else if (fs.existsSync(keyPath)) {
-  console.log(`✅ Arquivo de chave APNs encontrado em: ${keyPath}`);
-  apnsKeyContent = fs.readFileSync(keyPath, 'utf8');
-} else {
-  console.error(`❌ Arquivo de chave APNs não encontrado em: ${keyPath} e variável APNS_KEY_CONTENT não definida`);
-  process.exit(1);
-}
 
 // Inicializar o Firebase Admin SDK
 try {
@@ -92,16 +72,6 @@ try {
   console.error('❌ Erro ao inicializar Firebase Admin SDK:', error);
   process.exit(1);
 }
-
-// Configuração do provedor APNs
-const apnProvider = new apn.Provider({
-  token: {
-    key: apnsKeyContent,
-    keyId: process.env.APNS_KEY_ID,
-    teamId: process.env.APNS_TEAM_ID,
-  },
-  production: process.env.NODE_ENV === 'production'
-});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -202,9 +172,9 @@ app.post('/telegram-webhook', async (req, res) => {
       console.log(`📩 Mensagem: "${messageText}"`);
       console.log(`👤 De: ${from.first_name} (ID: ${from.id})`);
 
-      console.log('🔔 Enviando notificação via APNs...');
+      console.log('🔔 Enviando notificação via Firebase...');
       // Enviar para todos os dispositivos registrados
-      await sendApnsNotification(messageText, from.first_name);
+      await sendFirebaseNotification(messageText, from.first_name);
       console.log('✅ Notificação enviada com sucesso');
     } else {
       console.log('⚠️ Recebido update que não é mensagem de texto:', JSON.stringify(update, null, 2));
@@ -269,8 +239,8 @@ app.get('/setup-webhook', async (req, res) => {
   }
 });
 
-// 5. Função para enviar notificação via APNs
-async function sendApnsNotification(messageText, senderName) {
+// 5. Função para enviar notificação via Firebase
+async function sendFirebaseNotification(messageText, senderName) {
   try {
     // Buscar tokens no banco de dados
     const devices = await prisma.deviceToken.findMany();
@@ -280,111 +250,75 @@ async function sendApnsNotification(messageText, senderName) {
       return;
     }
 
-    // Separar tokens por tipo
-    const iosTokens = [];
-    const expoTokens = [];
-    
-    devices.forEach(device => {
-      // Tokens do Expo geralmente começam com ExponentPushToken, ExpoPushToken ou ExpoMockPushToken
-      if (device.deviceToken.includes('Expo') || 
-          device.deviceToken.includes('expo')) {
-        expoTokens.push(device.deviceToken);
-      } else if (device.platform === 'ios') {
-        iosTokens.push(device.deviceToken);
-      }
-    });
-    
-    console.log(`Dispositivos encontrados: ${devices.length}`);
-    console.log(`Tokens iOS: ${iosTokens.length}`);
-    console.log(`Tokens Expo: ${expoTokens.length}`);
-    
-    // Enviar para dispositivos iOS nativos via APNs
-    if (iosTokens.length > 0) {
-      const notification = new apn.Notification();
-      
-      // Configurar a notificação
-      notification.expiry = Math.floor(Date.now() / 1000) + 3600;
-      notification.badge = 1;
-      notification.sound = 'default';
-      notification.alert = {
-        title: `Futuros Tech`,
-        body: `Novo sinal de entrada, caso seja Premium abra para ver!`
-      };
-      notification.topic = process.env.BUNDLE_ID;
-      
-      notification.payload = {
+    console.log(`🔔 Enviando notificação via Firebase...`);
+    console.log(`📱 Dispositivos encontrados: ${devices.length}`);
+
+    // Preparar a mensagem
+    const message = {
+      notification: {
+        title: 'Futuros Tech',
+        body: 'Novo sinal de entrada, caso seja Premium abra para ver!'
+      },
+      data: {
         sender: senderName,
         messageType: 'telegram',
         timestamp: new Date().toISOString()
-      };
-      
-      console.log(`Enviando notificação para ${iosTokens.length} dispositivos iOS via APNs`);
-      const result = await apnProvider.send(notification, iosTokens);
-      
-      console.log('Resultado do envio APNs:', JSON.stringify(result, null, 2));
-      
-      // Verificar falhas
-      if (result.failed.length > 0) {
-        console.error('Falhas no envio APNs:', result.failed);
-        
-        // Remover tokens inválidos do banco
-        for (const item of result.failed) {
-          if (item.response && (
-            item.response.reason === 'BadDeviceToken' || 
-            item.response.reason === 'Unregistered'
-          )) {
-            console.log(`Removendo token inválido: ${item.device}`);
-            await prisma.deviceToken.delete({
-              where: { deviceToken: item.device }
-            });
+      },
+      android: {
+        notification: {
+          sound: 'default',
+          channelId: 'default'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
           }
         }
       }
-    }
-    
-    // Enviar para dispositivos Expo
-    if (expoTokens.length > 0) {
-      console.log(`Enviando notificação para ${expoTokens.length} dispositivos via Expo`);
-      
+    };
+
+    // Enviar para cada dispositivo
+    const sendPromises = devices.map(async (device) => {
       try {
-        const response = await fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(expoTokens.map(token => ({
-            to: token,
-            title: 'Futuros Tech',
-            body: 'Novo sinal de entrada, caso seja Premium abra para ver!',
-            sound: 'default',
-            badge: 1,
-            data: {
-              sender: senderName,
-              messageType: 'telegram',
-              timestamp: new Date().toISOString()
-            }
-          })))
-        });
-        
-        const result = await response.json();
-        console.log('Resultado do envio Expo:', JSON.stringify(result, null, 2));
-        
-        // Verificar falhas
-        if (result.data && result.data.some(item => item.status === 'error')) {
-          const failedTokens = result.data
-            .filter(item => item.status === 'error')
-            .map(item => item.message);
-          
-          console.error('Falhas no envio Expo:', failedTokens);
-        }
+        message.token = device.deviceToken;
+        const response = await admin.messaging().send(message);
+        console.log('✅ Notificação enviada com sucesso para:', device.deviceToken);
+        console.log('Firebase response:', response);
+        return { success: true, token: device.deviceToken };
       } catch (error) {
-        console.error('Erro ao enviar via Expo:', error);
+        console.error(`❌ Erro ao enviar para ${device.deviceToken}:`, error.code);
+        if (
+          error.code === 'messaging/invalid-registration-token' ||
+          error.code === 'messaging/registration-token-not-registered'
+        ) {
+          console.log(`⚠️ Token inválido ou não registrado:`, device.deviceToken);
+        }
+        return { success: false, token: device.deviceToken, error: error.code };
       }
+    });
+
+    // Aguardar todas as notificações
+    const results = await Promise.all(sendPromises);
+    
+    // Contabilizar resultados
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    
+    console.log(`\n📊 Resumo do envio:`);
+    console.log(`✅ Enviadas com sucesso: ${successful}`);
+    console.log(`❌ Falhas: ${failed}\n`);
+
+    // Listar tokens com falha para referência
+    const failedTokens = results.filter(r => !r.success);
+    if (failedTokens.length > 0) {
+      console.log('Tokens com falha:', failedTokens);
     }
+
   } catch (error) {
-    console.error('Erro ao enviar notificação:', error);
+    console.error('❌ Erro ao enviar notificações:', error);
   }
 }
 
