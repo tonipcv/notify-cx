@@ -90,7 +90,6 @@ app.get('/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV,
-    webhook_url: process.env.WEBHOOK_URL,
     server: 'running',
     database: 'connected'
   });
@@ -120,7 +119,7 @@ app.post('/send-notification', async (req, res) => {
 
 // 1. Rota principal para teste
 app.get('/', (req, res) => {
-  res.send('Servidor rodando. Webhook em /telegram-webhook');
+  res.send('Servidor de notificações iOS rodando');
 });
 
 // 2. Rota para registrar dispositivos
@@ -130,7 +129,7 @@ app.post('/register-device', async (req, res) => {
   console.log('Body completo:', JSON.stringify(req.body, null, 2));
   
   // Extrair dados do body
-  const { deviceToken, userId, platform } = req.body;
+  const { deviceToken, userId, email, platform } = req.body;
   
   // Verificar token
   if (!deviceToken) {
@@ -146,6 +145,7 @@ app.post('/register-device', async (req, res) => {
     console.log(`📱 Registrando dispositivo:
       Token: ${deviceToken}
       Usuário: ${userId || 'anônimo'}
+      Email: ${email || 'não informado'}
       Plataforma: ${platform || 'ios'}`);
 
     // Armazena o token no banco de dados
@@ -155,12 +155,14 @@ app.post('/register-device', async (req, res) => {
       },
       update: {
         userId: userId || 'anônimo',
+        email: email || null,
         platform: platform || 'ios',
         lastUpdated: new Date()
       },
       create: {
         deviceToken: deviceToken,
         userId: userId || 'anônimo',
+        email: email || null,
         platform: platform || 'ios'
       }
     });
@@ -177,96 +179,6 @@ app.post('/register-device', async (req, res) => {
     res.status(500).json({ 
       error: 'Erro ao registrar dispositivo',
       details: error.message
-    });
-  }
-});
-
-// 3. Rota Webhook do Telegram
-app.post('/telegram-webhook', async (req, res) => {
-  console.log('\n Telegram Webhook Acionado');
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('URL completa:', req.protocol + '://' + req.get('host') + req.originalUrl);
-  console.log('Headers:', req.headers);
-  console.log('Body completo:', req.body);
-  console.log('Query:', req.query);
-  console.log('Method:', req.method);
-  console.log('IP:', req.ip);
-  
-  try {
-    const update = req.body;
-    console.log('Update recebido do Telegram:', JSON.stringify(update, null, 2));
-
-    if (update.message && update.message.text) {
-      const messageText = update.message.text;
-      const from = update.message.from;
-      console.log(`📩 Mensagem: "${messageText}"`);
-      console.log(`👤 De: ${from.first_name} (ID: ${from.id})`);
-
-      console.log('🔔 Enviando notificação via Firebase...');
-      // Enviar para todos os dispositivos registrados
-      await sendFirebaseNotification(messageText, from.first_name);
-      console.log('✅ Notificação enviada com sucesso');
-    } else {
-      console.log('⚠️ Recebido update que não é mensagem de texto:', JSON.stringify(update, null, 2));
-    }
-
-    // Log da resposta
-    console.log('✅ Enviando resposta 200 para o Telegram');
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('❌ Erro no processamento do webhook:', error);
-    console.error('Stack trace:', error.stack);
-    console.error('Request body:', req.body);
-    res.sendStatus(500);
-  }
-});
-
-// 4. Rota para configurar webhook do Telegram
-app.get('/setup-webhook', async (req, res) => {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const WEBHOOK_URL = process.env.WEBHOOK_URL;
-  
-  console.log('Configurando webhook com:');
-  console.log('Token:', TELEGRAM_BOT_TOKEN);
-  console.log('URL:', WEBHOOK_URL);
-  
-  try {
-    // Verificar status atual
-    const statusResponse = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`
-    );
-    const statusData = await statusResponse.json();
-    console.log('Status atual detalhado do webhook:', JSON.stringify(statusData, null, 2));
-
-    // Configurar novo webhook
-    const response = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: WEBHOOK_URL,
-          allowed_updates: ["message", "edited_message", "callback_query"]
-        })
-      }
-    );
-    const data = await response.json();
-    console.log('Resposta da configuração do webhook:', JSON.stringify(data, null, 2));
-    
-    res.json({
-      status: 'Verificação completa',
-      webhookInfo: statusData,
-      setupResponse: data
-    });
-  } catch (error) {
-    console.error('Erro ao configurar webhook:', error);
-    console.error('Stack trace:', error.stack);
-    res.status(500).json({ 
-      error: 'Erro ao configurar webhook',
-      details: error.message,
-      stack: error.stack
     });
   }
 });
@@ -289,11 +201,11 @@ async function sendFirebaseNotification(messageText, senderName, customTitle = n
     const message = {
       notification: {
         title: customTitle || 'Futuros Tech',
-        body: senderName === 'Painel' ? messageText : 'Novo sinal de entrada, caso seja Premium abra para ver!'
+        body: messageText
       },
       data: {
         sender: senderName,
-        messageType: senderName === 'Painel' ? 'custom' : 'telegram',
+        messageType: 'custom',
         message: messageText,
         timestamp: new Date().toISOString()
       },
@@ -505,9 +417,7 @@ app.listen(PORT, () => {
   console.log('- GET  /health');
   console.log('- GET  /');
   console.log('- POST /register-device');
-  console.log('- POST /telegram-webhook');
-  console.log('- POST /test-webhook');
-  console.log('- GET  /setup-webhook');
+  console.log('- POST /send-notification');
   console.log('- GET  /devices');
   console.log('- GET  /db-test');
   console.log('- POST /send-test-notification\n');

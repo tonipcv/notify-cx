@@ -11,6 +11,7 @@ model DeviceToken {
   id          String   @id @default(uuid())
   deviceToken String   @unique
   userId      String   @default("anônimo")
+  email       String?
   platform    String   @default("ios")
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
