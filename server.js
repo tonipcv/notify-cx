@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import admin from 'firebase-admin';
+import { startScheduledNotifications, stopScheduledNotifications } from './scheduled-notifications.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -579,12 +580,16 @@ app.listen(PORT, () => {
   console.log('- GET  /devices');
   console.log('- GET  /db-test');
   console.log('- POST /send-test-notification\n');
+
+  // Iniciar o serviço de notificações agendadas
+  startScheduledNotifications();
 });
 
 // 7. Limpar recursos ao encerrar
 process.on('SIGINT', async () => {
   console.log('Encerrando servidor e conexões...');
+  // Parar o serviço de notificações agendadas
+  stopScheduledNotifications();
   await prisma.$disconnect();
-  apnProvider.shutdown();
   process.exit();
 });

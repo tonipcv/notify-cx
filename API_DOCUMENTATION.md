@@ -10,6 +10,7 @@
   - [Listagem de Dispositivos](#listagem-de-dispositivos)
   - [Teste de Banco de Dados](#teste-de-banco-de-dados)
   - [Teste de Notificação](#teste-de-notificação)
+- [Notificações Agendadas](#notificações-agendadas)
 - [Códigos de Status](#códigos-de-status)
 - [Erros Comuns](#erros-comuns)
 
@@ -228,6 +229,40 @@ Envia uma notificação de teste para um usuário específico.
     "expoCount": 1
 }
 ```
+
+## Notificações Agendadas
+
+O sistema inclui um serviço de notificações agendadas que envia automaticamente mensagens para todos os dispositivos registrados em horários específicos.
+
+### Notificação Diária de Protocolo
+
+Uma notificação é enviada automaticamente todos os dias às 16:00 (horário de Brasília) para todos os dispositivos registrados.
+
+**Detalhes da Notificação:**
+```json
+{
+    "title": "Attention",
+    "body": "Complete your protocol today to get closer to your ultimate goal!",
+    "data": {
+        "messageType": "daily_reminder",
+        "timestamp": "2024-01-01T16:00:00.000Z"
+    }
+}
+```
+
+**Características:**
+- Horário: 16:00 (Brasília)
+- Frequência: Diária
+- Destinatários: Todos os dispositivos registrados
+- Tipo: Push Notification (Firebase e Expo)
+- Som: Padrão
+- Badge: 1
+
+**Observações:**
+1. O serviço inicia automaticamente com o servidor
+2. Usa o fuso horário America/Sao_Paulo
+3. Logs detalhados são gerados para cada envio
+4. Em caso de falha, tentará novamente no próximo ciclo
 
 ## Códigos de Status
 
