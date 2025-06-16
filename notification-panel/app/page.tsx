@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 export default function Home() {
-  const [title, setTitle] = useState('Futuros Tech')
+  const [title, setTitle] = useState('Cxlus')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ success?: boolean; message?: string } | null>(null)
@@ -14,7 +14,7 @@ export default function Home() {
     setResult(null)
 
     try {
-      const response = await fetch('https://boop-notify-ios-ft.dpbdp1.easypanel.host/send-notification', {
+      const response = await fetch('https://aa-ios-notify-cxlus.dpbdp1.easypanel.host/send-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -42,17 +42,18 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl">
-        <div className="p-8">
-          <div className="uppercase tracking-wide text-sm text-indigo-500 font-semibold mb-1">
-            Painel de Notificações
-          </div>
-          <h1 className="text-3xl font-bold mb-6">Enviar Notificação</h1>
-          
+    <div className="min-h-screen bg-[#f6f6ef]">
+      <div className="max-w-2xl mx-auto px-4">
+        {/* Header */}
+        <header className="bg-[#ff6600] py-2 px-2 mb-4">
+          <h1 className="text-lg font-normal text-white">Painel de Notificações</h1>
+        </header>
+
+        {/* Main Content */}
+        <main className="bg-white p-4 border border-gray-200">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="title" className="block text-sm text-gray-800 mb-1 font-normal">
                 Título
               </label>
               <input
@@ -60,13 +61,13 @@ export default function Home() {
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="w-full px-2 py-1 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
                 required
               />
             </div>
 
             <div>
-              <label htmlFor="message" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="message" className="block text-sm text-gray-800 mb-1 font-normal">
                 Mensagem
               </label>
               <textarea
@@ -74,35 +75,49 @@ export default function Home() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={4}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="w-full px-2 py-1 border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
                 required
+                placeholder="Digite sua mensagem aqui..."
               />
             </div>
 
             <button
               type="submit"
               disabled={sending}
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+              className={`px-4 py-1 text-sm ${
                 sending
-                  ? 'bg-indigo-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-[#ff6600] text-white hover:bg-[#ff7720]'
               }`}
             >
               {sending ? 'Enviando...' : 'Enviar Notificação'}
             </button>
           </form>
 
+          {/* Status Message */}
           {result && (
-            <div
-              className={`mt-4 p-4 rounded-md ${
-                result.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-              }`}
-            >
+            <div className={`mt-4 p-2 text-sm ${
+              result.success ? 'text-green-800 bg-green-50' : 'text-red-800 bg-red-50'
+            }`}>
               {result.message}
             </div>
           )}
-        </div>
+
+          {/* Preview */}
+          <div className="mt-8 border-t border-gray-200 pt-4">
+            <h3 className="text-sm text-gray-600 mb-2">Preview</h3>
+            <div className="bg-[#f6f6ef] p-3 border border-gray-200">
+              <div className="text-sm font-medium text-gray-900">{title || 'Título da Notificação'}</div>
+              <div className="text-sm text-gray-600 mt-1">{message || 'Sua mensagem aparecerá aqui'}</div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <footer className="mt-8 pt-4 border-t border-gray-200 text-xs text-gray-500">
+            <p>Envie notificações push para seus usuários de forma simples e direta.</p>
+          </footer>
+        </main>
       </div>
-    </main>
+    </div>
   )
 }

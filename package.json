@@ -12,11 +12,15 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@prisma/client": "^6.4.1",
+    "autoprefixer": "^10.4.21",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "firebase-admin": "^13.2.0",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "postcss": "^8.5.5",
+    "tailwindcss": "^4.1.10"
   },
   "type": "module",
   "devDependencies": {

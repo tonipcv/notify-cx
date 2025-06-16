@@ -101,7 +101,11 @@ app.post('/send-notification', async (req, res) => {
     const { title, message } = req.body;
     
     if (!message) {
-      return res.status(400).json({ error: 'Mensagem é obrigatória' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Mensagem é obrigatória',
+        details: 'O campo message deve ser fornecido no corpo da requisição'
+      });
     }
 
     console.log('🔔 Enviando notificação personalizada...');
@@ -110,10 +114,23 @@ app.post('/send-notification', async (req, res) => {
 
     await sendFirebaseNotification(message, 'Painel', title);
 
-    res.json({ success: true, message: 'Notificação enviada com sucesso' });
+    // Buscar a contagem atual de dispositivos para incluir na resposta
+    const deviceCount = await prisma.deviceToken.count();
+
+    res.json({ 
+      success: true, 
+      message: 'Notificação enviada com sucesso',
+      deviceCount,
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
     console.error('❌ Erro ao enviar notificação:', error);
-    res.status(500).json({ error: 'Erro ao enviar notificação' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Erro ao enviar notificação',
+      details: error.message || 'Erro interno do servidor',
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
@@ -197,73 +214,130 @@ async function sendFirebaseNotification(messageText, senderName, customTitle = n
     console.log(`🔔 Enviando notificação via Firebase...`);
     console.log(`📱 Dispositivos encontrados: ${devices.length}`);
 
-    // Preparar a mensagem
-    const message = {
-      notification: {
-        title: customTitle || 'Futuros Tech',
-        body: messageText
-      },
-      data: {
-        sender: senderName,
-        messageType: 'custom',
-        message: messageText,
-        timestamp: new Date().toISOString()
-      },
-      android: {
-        notification: {
-          sound: 'default',
-          channelId: 'default'
-        }
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1
-          }
-        }
-      }
-    };
-
-    // Enviar para cada dispositivo
-    const sendPromises = devices.map(async (device) => {
-      try {
-        message.token = device.deviceToken;
-        const response = await admin.messaging().send(message);
-        console.log('✅ Notificação enviada com sucesso para:', device.deviceToken);
-        console.log('Firebase response:', response);
-        return { success: true, token: device.deviceToken };
-      } catch (error) {
-        console.error(`❌ Erro ao enviar para ${device.deviceToken}:`, error.code);
-        if (
-          error.code === 'messaging/invalid-registration-token' ||
-          error.code === 'messaging/registration-token-not-registered'
-        ) {
-          console.log(`⚠️ Token inválido ou não registrado:`, device.deviceToken);
-        }
-        return { success: false, token: device.deviceToken, error: error.code };
+    // Separar tokens por tipo
+    const firebaseTokens = [];
+    const expoTokens = [];
+    
+    devices.forEach(device => {
+      if (device.deviceToken.includes('Expo') || device.deviceToken.includes('expo')) {
+        expoTokens.push(device.deviceToken);
+      } else {
+        firebaseTokens.push(device.deviceToken);
       }
     });
 
-    // Aguardar todas as notificações
-    const results = await Promise.all(sendPromises);
-    
-    // Contabilizar resultados
-    const successful = results.filter(r => r.success).length;
-    const failed = results.filter(r => !r.success).length;
-    
-    console.log(`\n📊 Resumo do envio:`);
-    console.log(`✅ Enviadas com sucesso: ${successful}`);
-    console.log(`❌ Falhas: ${failed}\n`);
+    console.log(`Tokens Firebase: ${firebaseTokens.length}`);
+    console.log(`Tokens Expo: ${expoTokens.length}`);
 
-    // Listar tokens com falha para referência
-    const failedTokens = results.filter(r => !r.success);
-    if (failedTokens.length > 0) {
-      console.log('Tokens com falha:', failedTokens);
+    // Enviar para dispositivos Firebase
+    if (firebaseTokens.length > 0) {
+      // Preparar a mensagem Firebase
+      const message = {
+        notification: {
+          title: customTitle || 'Futuros Tech',
+          body: messageText
+        },
+        data: {
+          sender: senderName,
+          messageType: 'custom',
+          message: messageText,
+          timestamp: new Date().toISOString()
+        },
+        android: {
+          notification: {
+            sound: 'default',
+            channelId: 'default'
+          }
+        },
+        apns: {
+          payload: {
+            aps: {
+              alert: {
+                title: customTitle || 'Futuros Tech',
+                body: messageText
+              },
+              sound: 'default',
+              badge: 1,
+              'mutable-content': 1,
+              'content-available': 1
+            },
+            fcmOptions: {
+              analyticsLabel: 'ios_notification'
+            }
+          },
+          fcmOptions: {
+            imageUrl: null
+          },
+          headers: {
+            'apns-priority': '10',
+            'apns-push-type': 'alert'
+          }
+        }
+      };
+
+      // Enviar para cada dispositivo Firebase
+      const sendPromises = firebaseTokens.map(async (token) => {
+        try {
+          message.token = token;
+          const response = await admin.messaging().send(message);
+          console.log('✅ Notificação Firebase enviada com sucesso para:', token);
+          console.log('Firebase response:', response);
+          return { success: true, token };
+        } catch (error) {
+          console.error(`❌ Erro ao enviar para ${token}:`, error.code);
+          if (
+            error.code === 'messaging/invalid-registration-token' ||
+            error.code === 'messaging/registration-token-not-registered'
+          ) {
+            console.log(`⚠️ Token inválido ou não registrado:`, token);
+          }
+          return { success: false, token, error: error.code };
+        }
+      });
+
+      const firebaseResults = await Promise.all(sendPromises);
+      console.log('\n📊 Resumo do envio Firebase:');
+      console.log(`✅ Enviadas com sucesso: ${firebaseResults.filter(r => r.success).length}`);
+      console.log(`❌ Falhas: ${firebaseResults.filter(r => !r.success).length}\n`);
+    }
+
+    // Enviar para dispositivos Expo
+    if (expoTokens.length > 0) {
+      console.log(`Enviando notificação para ${expoTokens.length} dispositivos via Expo`);
+      
+      try {
+        const response = await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(expoTokens.map(token => ({
+            to: token,
+            title: customTitle || 'Futuros Tech',
+            body: messageText,
+            sound: 'default',
+            badge: 1,
+            data: {
+              sender: senderName,
+              messageType: 'custom',
+              message: messageText,
+              timestamp: new Date().toISOString()
+            }
+          })))
+        });
+        
+        const result = await response.json();
+        console.log('Resultado do envio Expo:', JSON.stringify(result, null, 2));
+      } catch (error) {
+        console.error('Erro ao enviar via Expo:', error);
+      }
     }
 
   } catch (error) {
     console.error('❌ Erro ao enviar notificações:', error);
+    throw error; // Propagar o erro para que a rota possa tratá-lo
   }
 }
 
@@ -410,6 +484,116 @@ app.get('/devices', async (req, res) => {
   }
 });
 
+// Rota para enviar notificação para múltiplos emails
+app.post('/send-notification-by-email', async (req, res) => {
+  try {
+    const { emails, message, title } = req.body;
+    
+    // Validar entrada
+    if (!emails || !message) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Emails e mensagem são obrigatórios',
+        details: 'Os campos emails (array) e message devem ser fornecidos no corpo da requisição'
+      });
+    }
+
+    // Garantir que emails é um array
+    const emailList = Array.isArray(emails) ? emails : [emails];
+
+    // Resultado para cada email
+    const results = {
+      successful: [],
+      failed: [],
+      totalDevices: 0,
+      devicesPerEmail: {}
+    };
+
+    // Processar cada email
+    for (const email of emailList) {
+      try {
+        // Buscar dispositivos associados ao email
+        const devices = await prisma.deviceToken.findMany({
+          where: {
+            email: email
+          }
+        });
+
+        results.devicesPerEmail[email] = {
+          deviceCount: devices.length,
+          devices: devices.map(d => ({
+            platform: d.platform,
+            lastUpdated: d.lastUpdated,
+            tokenType: d.deviceToken.includes('Expo') ? 'Expo' : 'Firebase'
+          }))
+        };
+
+        if (devices.length === 0) {
+          results.failed.push({
+            email,
+            error: 'Nenhum dispositivo encontrado',
+            timestamp: new Date().toISOString()
+          });
+          continue;
+        }
+
+        console.log(`🔔 Enviando notificação para dispositivos do email: ${email}`);
+        console.log(`📱 Dispositivos encontrados: ${devices.length}`);
+
+        // Enviar notificação
+        await sendFirebaseNotification(message, 'Email Notification', title);
+
+        results.successful.push({
+          email,
+          deviceCount: devices.length,
+          timestamp: new Date().toISOString()
+        });
+
+        results.totalDevices += devices.length;
+
+      } catch (error) {
+        console.error(`❌ Erro ao processar email ${email}:`, error);
+        results.failed.push({
+          email,
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    // Preparar resposta
+    const response = {
+      success: results.successful.length > 0,
+      summary: {
+        totalEmails: emailList.length,
+        successfulEmails: results.successful.length,
+        failedEmails: results.failed.length,
+        totalDevices: results.totalDevices
+      },
+      successful: results.successful,
+      failed: results.failed,
+      deviceDetails: results.devicesPerEmail,
+      timestamp: new Date().toISOString()
+    };
+
+    // Se alguns emails falharam mas outros tiveram sucesso, retornar 207 (Multi-Status)
+    const statusCode = results.failed.length > 0 ? 
+      (results.successful.length > 0 ? 207 : 500) : 
+      200;
+
+    res.status(statusCode).json(response);
+
+  } catch (error) {
+    console.error('❌ Erro ao enviar notificações:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Erro ao enviar notificações',
+      details: error.message || 'Erro interno do servidor',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Ambiente: ${process.env.NODE_ENV || 'desenvolvimento'}`);
@@ -418,6 +602,7 @@ app.listen(PORT, () => {
   console.log('- GET  /');
   console.log('- POST /register-device');
   console.log('- POST /send-notification');
+  console.log('- POST /send-notification-by-email');
   console.log('- GET  /devices');
   console.log('- GET  /db-test');
   console.log('- POST /send-test-notification\n');
