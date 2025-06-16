@@ -201,10 +201,10 @@ app.post('/register-device', async (req, res) => {
 });
 
 // 5. Função para enviar notificação via Firebase
-async function sendFirebaseNotification(messageText, senderName, customTitle = null) {
+async function sendFirebaseNotification(messageText, senderName, customTitle = null, specificDevices = null) {
   try {
-    // Buscar tokens no banco de dados
-    const devices = await prisma.deviceToken.findMany();
+    // Usar dispositivos específicos se fornecidos, caso contrário buscar todos
+    const devices = specificDevices || await prisma.deviceToken.findMany();
     
     if (devices.length === 0) {
       console.log('Nenhum dispositivo registrado');
@@ -242,44 +242,17 @@ async function sendFirebaseNotification(messageText, senderName, customTitle = n
           messageType: 'custom',
           message: messageText,
           timestamp: new Date().toISOString()
-        },
-        android: {
-          notification: {
-            sound: 'default',
-            channelId: 'default'
-          }
-        },
-        apns: {
-          payload: {
-            aps: {
-              alert: {
-                title: customTitle || 'Futuros Tech',
-                body: messageText
-              },
-              sound: 'default',
-              badge: 1,
-              'mutable-content': 1,
-              'content-available': 1
-            },
-            fcmOptions: {
-              analyticsLabel: 'ios_notification'
-            }
-          },
-          fcmOptions: {
-            imageUrl: null
-          },
-          headers: {
-            'apns-priority': '10',
-            'apns-push-type': 'alert'
-          }
         }
       };
 
       // Enviar para cada dispositivo Firebase
       const sendPromises = firebaseTokens.map(async (token) => {
         try {
-          message.token = token;
-          const response = await admin.messaging().send(message);
+          const tokenMessage = {
+            ...message,
+            token: token // Adicionar token ao objeto da mensagem
+          };
+          const response = await admin.messaging().send(tokenMessage);
           console.log('✅ Notificação Firebase enviada com sucesso para:', token);
           console.log('Firebase response:', response);
           return { success: true, token };
@@ -337,7 +310,7 @@ async function sendFirebaseNotification(messageText, senderName, customTitle = n
 
   } catch (error) {
     console.error('❌ Erro ao enviar notificações:', error);
-    throw error; // Propagar o erro para que a rota possa tratá-lo
+    throw error;
   }
 }
 
@@ -540,8 +513,8 @@ app.post('/send-notification-by-email', async (req, res) => {
         console.log(`🔔 Enviando notificação para dispositivos do email: ${email}`);
         console.log(`📱 Dispositivos encontrados: ${devices.length}`);
 
-        // Enviar notificação
-        await sendFirebaseNotification(message, 'Email Notification', title);
+        // Passar os dispositivos específicos para a função
+        await sendFirebaseNotification(message, 'Email Notification', title, devices);
 
         results.successful.push({
           email,
