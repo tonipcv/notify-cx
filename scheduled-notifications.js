@@ -100,22 +100,54 @@ async function sendDailyReminder() {
     }
 }
 
-// Agendar a notificação diária para as 16:00
-// Formato cron: minuto hora * * *
-const dailySchedule = cron.schedule('0 16 * * *', async () => {
-    console.log('🕒 Iniciando envio de notificação diária agendada...');
+// Agendar a notificação diária para as 16:00 (São Paulo)
+const dailyScheduleSP = cron.schedule('0 16 * * *', async () => {
+    console.log('🕒 Iniciando envio de notificação diária agendada (São Paulo)...');
     await sendDailyReminder();
 }, {
-    timezone: "America/Sao_Paulo" // Ajuste para o fuso horário correto
+    timezone: "America/Sao_Paulo"
 });
+
+// Agendar notificações a cada 2 horas durante horário comercial UK (9:00 - 17:00)
+const ukNotifications = [
+    cron.schedule('0 9 * * *', async () => {
+        console.log('🕒 Enviando notificação - 9:00 UK');
+        await sendDailyReminder();
+    }, { timezone: "Europe/London" }),
+    
+    cron.schedule('0 11 * * *', async () => {
+        console.log('🕒 Enviando notificação - 11:00 UK');
+        await sendDailyReminder();
+    }, { timezone: "Europe/London" }),
+    
+    cron.schedule('0 13 * * *', async () => {
+        console.log('🕒 Enviando notificação - 13:00 UK');
+        await sendDailyReminder();
+    }, { timezone: "Europe/London" }),
+    
+    cron.schedule('0 15 * * *', async () => {
+        console.log('🕒 Enviando notificação - 15:00 UK');
+        await sendDailyReminder();
+    }, { timezone: "Europe/London" }),
+    
+    cron.schedule('0 17 * * *', async () => {
+        console.log('🕒 Enviando notificação - 17:00 UK');
+        await sendDailyReminder();
+    }, { timezone: "Europe/London" })
+];
 
 export function startScheduledNotifications() {
     console.log('✅ Serviço de notificações agendadas iniciado');
-    console.log('📅 Próxima notificação será enviada às 16:00');
-    dailySchedule.start();
+    console.log('📅 Notificações agendadas:');
+    console.log('- 16:00 (São Paulo)');
+    console.log('- A cada 2 horas entre 9:00 e 17:00 (UK)');
+    
+    dailyScheduleSP.start();
+    ukNotifications.forEach(schedule => schedule.start());
 }
 
 export function stopScheduledNotifications() {
     console.log('⛔ Serviço de notificações agendadas parado');
-    dailySchedule.stop();
+    dailyScheduleSP.stop();
+    ukNotifications.forEach(schedule => schedule.stop());
 } 

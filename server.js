@@ -359,7 +359,7 @@ app.post('/send-test-notification', async (req, res) => {
       notification.badge = 1;
       notification.sound = 'default';
       notification.alert = {
-        title: title || 'Futuros Tech',
+        title: title || 'Cxlus',
         body: message || 'Novo sinal de entrada, caso seja Premium abra para ver!'
       };
       notification.topic = process.env.BUNDLE_ID;
@@ -388,7 +388,7 @@ app.post('/send-test-notification', async (req, res) => {
           },
           body: JSON.stringify(expoTokens.map(token => ({
             to: token,
-            title: title || 'Futuros Tech',
+            title: title || 'Cxlus',
             body: message || 'Novo sinal de entrada, caso seja Premium abra para ver!',
             sound: 'default',
             badge: 1,
