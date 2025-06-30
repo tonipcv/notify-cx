@@ -4,21 +4,38 @@ import admin from 'firebase-admin';
 
 const prisma = new PrismaClient();
 
-// Função para enviar notificação diária
-async function sendDailyReminder() {
+// Function to fetch user's protocol information
+async function getUserProtocolInfo(userId) {
     try {
-        // Buscar todos os dispositivos
-        const devices = await prisma.deviceToken.findMany();
+        const response = await fetch(`https://app.cxlus.com/api/protocols/available`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.API_TOKEN}`
+            }
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error fetching protocol information:', error);
+        return null;
+    }
+}
+
+// Function to send personalized notification
+async function sendPersonalizedNotification(title, body, userId = null, messageType = 'daily_reminder') {
+    try {
+        // Fetch devices (filter by userId if provided)
+        const whereClause = userId ? { userId } : {};
+        const devices = await prisma.deviceToken.findMany({ where: whereClause });
         
         if (devices.length === 0) {
-            console.log('Nenhum dispositivo registrado para notificação diária');
+            console.log('No devices registered for notification');
             return;
         }
 
-        console.log(`🔔 Enviando notificação diária...`);
-        console.log(`📱 Dispositivos encontrados: ${devices.length}`);
+        console.log(`🔔 Sending personalized notification...`);
+        console.log(`📱 Devices found: ${devices.length}`);
 
-        // Separar tokens por tipo
+        // Separate tokens by type
         const firebaseTokens = [];
         const expoTokens = [];
         
@@ -30,42 +47,38 @@ async function sendDailyReminder() {
             }
         });
 
-        // Preparar a mensagem
-        const message = {
-            notification: {
-                title: "Attention",
-                body: "Complete your protocol today to get closer to your ultimate goal!"
-            },
-            data: {
-                messageType: 'daily_reminder',
-                timestamp: new Date().toISOString()
-            }
-        };
-
-        // Enviar para dispositivos Firebase
+        // Send to Firebase devices
         if (firebaseTokens.length > 0) {
             const sendPromises = firebaseTokens.map(async (token) => {
                 try {
-                    const tokenMessage = {
-                        ...message,
-                        token: token
+                    const message = {
+                        notification: {
+                            title,
+                            body
+                        },
+                        data: {
+                            messageType,
+                            timestamp: new Date().toISOString()
+                        },
+                        token
                     };
-                    const response = await admin.messaging().send(tokenMessage);
-                    console.log('✅ Notificação diária enviada com sucesso para:', token);
+                    
+                    const response = await admin.messaging().send(message);
+                    console.log('✅ Notification sent successfully to:', token);
                     return { success: true, token };
                 } catch (error) {
-                    console.error(`❌ Erro ao enviar notificação diária para ${token}:`, error.code);
+                    console.error(`❌ Error sending notification to ${token}:`, error.code);
                     return { success: false, token, error: error.code };
                 }
             });
 
             const results = await Promise.all(sendPromises);
-            console.log('\n📊 Resumo do envio diário:');
-            console.log(`✅ Enviadas com sucesso: ${results.filter(r => r.success).length}`);
-            console.log(`❌ Falhas: ${results.filter(r => !r.success).length}\n`);
+            console.log('\n📊 Sending summary:');
+            console.log(`✅ Successfully sent: ${results.filter(r => r.success).length}`);
+            console.log(`❌ Failed: ${results.filter(r => !r.success).length}\n`);
         }
 
-        // Enviar para dispositivos Expo
+        // Send to Expo devices
         if (expoTokens.length > 0) {
             try {
                 const response = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -77,77 +90,211 @@ async function sendDailyReminder() {
                     },
                     body: JSON.stringify(expoTokens.map(token => ({
                         to: token,
-                        title: "Attention",
-                        body: "Complete your protocol today to get closer to your ultimate goal!",
+                        title,
+                        body,
                         sound: 'default',
                         badge: 1,
                         data: {
-                            messageType: 'daily_reminder',
+                            messageType,
                             timestamp: new Date().toISOString()
                         }
                     })))
                 });
                 
                 const result = await response.json();
-                console.log('Resultado do envio Expo:', JSON.stringify(result, null, 2));
+                console.log('Expo sending result:', JSON.stringify(result, null, 2));
             } catch (error) {
-                console.error('Erro ao enviar via Expo:', error);
+                console.error('Error sending via Expo:', error);
             }
         }
-
     } catch (error) {
-        console.error('❌ Erro ao enviar notificação diária:', error);
+        console.error('❌ Error sending notification:', error);
     }
 }
 
-// Agendar a notificação diária para as 16:00 (São Paulo)
-const dailyScheduleSP = cron.schedule('0 16 * * *', async () => {
-    console.log('🕒 Iniciando envio de notificação diária agendada (São Paulo)...');
-    await sendDailyReminder();
+// Function to check protocol status and get appropriate message
+async function getProtocolStatusMessage(userProtocols, device) {
+    if (!userProtocols || (!userProtocols.active?.length && !userProtocols.to_start?.length)) {
+        return {
+            title: "Welcome to Cxlus! 👋",
+            body: "No active treatment yet. Contact your doctor to start your journey!",
+            type: 'no_treatment'
+        };
+    }
+
+    // Check for protocols that haven't started yet
+    if (userProtocols.to_start?.length > 0) {
+        const nextProtocol = userProtocols.to_start[0];
+        const startDate = new Date(nextProtocol.assignments[0].startDate);
+        const daysUntilStart = Math.ceil((startDate - new Date()) / (1000 * 60 * 60 * 24));
+        
+        return {
+            title: "Treatment Starting Soon! 🎯",
+            body: `Your treatment plan begins in ${daysUntilStart} days. Get ready for your transformation journey!`,
+            type: 'starting_soon'
+        };
+    }
+
+    // Check if the active protocol is completed
+    const activeProtocol = userProtocols.active[0];
+    if (activeProtocol.progress === 100) {
+        return {
+            title: "Treatment Complete! 🎉",
+            body: "Congratulations on completing your treatment! Schedule a follow-up with your doctor.",
+            type: 'completed'
+        };
+    }
+
+    return null;
+}
+
+// Morning notification (8:00 AM)
+const morningReminder = cron.schedule('0 8 * * *', async () => {
+    console.log('🌅 Starting morning notification...');
+    
+    try {
+        const devices = await prisma.deviceToken.findMany();
+        for (const device of devices) {
+            const userProtocols = await getUserProtocolInfo(device.userId);
+            
+            // Check special status first
+            const statusMessage = await getProtocolStatusMessage(userProtocols, device);
+            if (statusMessage) {
+                await sendPersonalizedNotification(
+                    statusMessage.title,
+                    statusMessage.body,
+                    device.userId,
+                    statusMessage.type
+                );
+                continue; // Skip regular notification
+            }
+
+            // Regular notification for active treatment
+            if (userProtocols?.active?.length > 0) {
+                const protocol = userProtocols.active[0];
+                const tasks = protocol.days[protocol.currentDay - 1]?.sessions[0]?.tasks || [];
+                const totalTasks = tasks.length;
+                
+                await sendPersonalizedNotification(
+                    `Good Morning, ${device.name || 'Patient'}! 🌞`,
+                    `You have ${totalTasks} tasks scheduled for today. Open the app to start your treatment journey!`,
+                    device.userId,
+                    'morning_tasks'
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Error in morning notification:', error);
+    }
 }, {
     timezone: "America/Sao_Paulo"
 });
 
-// Agendar notificações a cada 2 horas durante horário comercial UK (9:00 - 17:00)
-const ukNotifications = [
-    cron.schedule('0 9 * * *', async () => {
-        console.log('🕒 Enviando notificação - 9:00 UK');
-        await sendDailyReminder();
-    }, { timezone: "Europe/London" }),
+// Afternoon notification (2:00 PM) - Incomplete checklist
+const afternoonReminder = cron.schedule('0 14 * * *', async () => {
+    console.log('🌇 Starting afternoon check...');
     
-    cron.schedule('0 11 * * *', async () => {
-        console.log('🕒 Enviando notificação - 11:00 UK');
-        await sendDailyReminder();
-    }, { timezone: "Europe/London" }),
+    try {
+        const devices = await prisma.deviceToken.findMany();
+        for (const device of devices) {
+            const userProtocols = await getUserProtocolInfo(device.userId);
+            
+            // Check special status first
+            const statusMessage = await getProtocolStatusMessage(userProtocols, device);
+            if (statusMessage) {
+                // Don't send afternoon reminder for non-active treatments
+                continue;
+            }
+
+            // Regular notification for active treatment
+            if (userProtocols?.active?.length > 0) {
+                const protocol = userProtocols.active[0];
+                const incompleteTasks = protocol.days[protocol.currentDay - 1]?.sessions[0]?.tasks.filter(task => !task.isCompleted) || [];
+                
+                if (incompleteTasks.length > 0) {
+                    await sendPersonalizedNotification(
+                        `Treatment Reminder ⏰`,
+                        `You have ${incompleteTasks.length} pending tasks remaining. Keep up with your treatment plan!`,
+                        device.userId,
+                        'afternoon_reminder'
+                    );
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error in afternoon notification:', error);
+    }
+}, {
+    timezone: "America/Sao_Paulo"
+});
+
+// Evening notification (8:00 PM)
+const eveningReminder = cron.schedule('0 20 * * *', async () => {
+    console.log('🌙 Starting evening notification...');
     
-    cron.schedule('0 13 * * *', async () => {
-        console.log('🕒 Enviando notificação - 13:00 UK');
-        await sendDailyReminder();
-    }, { timezone: "Europe/London" }),
-    
-    cron.schedule('0 15 * * *', async () => {
-        console.log('🕒 Enviando notificação - 15:00 UK');
-        await sendDailyReminder();
-    }, { timezone: "Europe/London" }),
-    
-    cron.schedule('0 17 * * *', async () => {
-        console.log('🕒 Enviando notificação - 17:00 UK');
-        await sendDailyReminder();
-    }, { timezone: "Europe/London" })
-];
+    try {
+        const devices = await prisma.deviceToken.findMany();
+        for (const device of devices) {
+            const userProtocols = await getUserProtocolInfo(device.userId);
+            
+            // Check special status first
+            const statusMessage = await getProtocolStatusMessage(userProtocols, device);
+            if (statusMessage) {
+                // Only send evening status message for completed treatments
+                if (statusMessage.type === 'completed') {
+                    await sendPersonalizedNotification(
+                        statusMessage.title,
+                        statusMessage.body,
+                        device.userId,
+                        statusMessage.type
+                    );
+                }
+                continue;
+            }
+
+            // Regular notification for active treatment
+            if (userProtocols?.active?.length > 0) {
+                const protocol = userProtocols.active[0];
+                const completedTasks = protocol.days[protocol.currentDay - 1]?.sessions[0]?.tasks.filter(task => task.isCompleted).length || 0;
+                const totalTasks = protocol.days[protocol.currentDay - 1]?.sessions[0]?.tasks.length || 0;
+                
+                let message = `Today's Progress: ${completedTasks}/${totalTasks} tasks completed.\n\n`;
+                if (completedTasks === totalTasks) {
+                    message += "Excellent work today! 🎉\nRest well and see you tomorrow!";
+                } else {
+                    message += "Take a moment to review your remaining tasks.\nEvery step matters in your treatment journey! 💪";
+                }
+                
+                await sendPersonalizedNotification(
+                    `Daily Summary 📋`,
+                    message,
+                    device.userId,
+                    'evening_summary'
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Error in evening notification:', error);
+    }
+}, {
+    timezone: "America/Sao_Paulo"
+});
 
 export function startScheduledNotifications() {
-    console.log('✅ Serviço de notificações agendadas iniciado');
-    console.log('📅 Notificações agendadas:');
-    console.log('- 16:00 (São Paulo)');
-    console.log('- A cada 2 horas entre 9:00 e 17:00 (UK)');
+    console.log('✅ Scheduled notification service started');
+    console.log('📅 Scheduled notifications:');
+    console.log('- 08:00 AM - Morning task reminder');
+    console.log('- 02:00 PM - Pending tasks check');
+    console.log('- 08:00 PM - Daily progress summary');
     
-    dailyScheduleSP.start();
-    ukNotifications.forEach(schedule => schedule.start());
+    morningReminder.start();
+    afternoonReminder.start();
+    eveningReminder.start();
 }
 
 export function stopScheduledNotifications() {
-    console.log('⛔ Serviço de notificações agendadas parado');
-    dailyScheduleSP.stop();
-    ukNotifications.forEach(schedule => schedule.stop());
+    console.log('⛔ Scheduled notification service stopped');
+    morningReminder.stop();
+    afternoonReminder.stop();
+    eveningReminder.stop();
 } 
