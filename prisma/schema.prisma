@@ -18,3 +18,13 @@ model DeviceToken {
 
   @@index([userId])
 }
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, type, createdAt])
+  @@index([createdAt])
+}
