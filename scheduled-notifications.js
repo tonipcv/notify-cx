@@ -284,53 +284,22 @@ async function initializeNotificationTracker() {
     }
 }
 
-// Hourly check-in reminder (8 AM to 8 PM)
-const hourlyReminder = cron.schedule('0 8-20 * * *', async () => {
+// Simple hourly notifications (every hour)
+const hourlyReminder = cron.schedule('0 * * * *', async () => {
     const currentHour = new Date().getHours();
-    console.log(`🕐 Starting ${currentHour}:00 notification check...`);
+    console.log(`🕐 Sending ${currentHour}:00 notification...`);
     
     try {
         const devices = await prisma.deviceToken.findMany();
         for (const device of devices) {
-            // Check if notification was already sent this hour
-            if (wasNotificationSentToday(device.userId, `hour_${currentHour}`)) {
-                console.log(`${currentHour}:00 notification already sent to user ${device.userId}`);
-                continue;
-            }
-
-            const userProtocols = await getUserProtocolInfo(device.userId);
+            let message = `Hora de fazer seu check-in diário! 🎯`;
             
-            // Skip if no active protocols or if check-in is already done
-            if (!userProtocols?.active?.length || userProtocols.active[0].hasCheckinToday) {
-                continue;
-            }
-
-            // Skip during main notification hours (8, 14, and 20)
-            if (currentHour === 8 || currentHour === 14 || currentHour === 20) {
-                continue;
-            }
-
-            let message;
-            // Morning message (9-11)
-            if (currentHour >= 9 && currentHour <= 11) {
-                message = `Good morning! Don't forget to start your daily check-in. It only takes a few minutes! 🌅`;
-            }
-            // Afternoon message (12-16)
-            else if (currentHour >= 12 && currentHour <= 16) {
-                message = `How's your day going? Take a moment to complete your daily check-in! ☀️`;
-            }
-            // Evening message (17-19)
-            else {
-                message = `The day is almost over. Don't forget to complete your daily check-in! 🌙`;
-            }
-
             await sendPersonalizedNotification(
-                `Check-in Reminder ⏰`,
+                'Lembrete de Check-in ⏰',
                 message,
                 device.userId,
                 'hourly_reminder'
             );
-            markNotificationAsSent(device.userId, `hour_${currentHour}`);
         }
     } catch (error) {
         console.error(`Error in ${currentHour}:00 notification:`, error);
@@ -341,25 +310,16 @@ const hourlyReminder = cron.schedule('0 8-20 * * *', async () => {
 
 export function startScheduledNotifications() {
     console.log('✅ Scheduled notification service started');
-    console.log('📅 Scheduled notifications (UK Time):');
-    console.log('- 08:00 AM - Morning check-in reminder');
-    console.log('- 02:00 PM - Pending check-in reminder');
-    console.log('- 08:00 PM - Daily progress summary');
-    console.log('+ Hourly check-in reminders between main notifications');
+    console.log('📅 Notificações agendadas (Hora UK):');
+    console.log('- Notificações a cada hora');
     
     // Initialize notification tracker
     initializeNotificationTracker().then(() => {
-        morningReminder.start();
-        afternoonReminder.start();
-        eveningReminder.start();
         hourlyReminder.start();
     });
 }
 
 export function stopScheduledNotifications() {
     console.log('⛔ Scheduled notification service stopped');
-    morningReminder.stop();
-    afternoonReminder.stop();
-    eveningReminder.stop();
     hourlyReminder.stop();
 } 
