@@ -292,7 +292,7 @@ const hourlyReminder = cron.schedule('0 * * * *', async () => {
     try {
         const devices = await prisma.deviceToken.findMany();
         
-        // Agrupar dispositivos por userId
+        // Group devices by userId
         const userDevices = new Map();
         devices.forEach(device => {
             if (!userDevices.has(device.userId)) {
@@ -301,13 +301,13 @@ const hourlyReminder = cron.schedule('0 * * * *', async () => {
             userDevices.get(device.userId).push(device);
         });
 
-        // Enviar apenas uma notificação por usuário (para o primeiro dispositivo)
+        // Send only one notification per user (to the first device)
         for (const [userId, userDeviceList] of userDevices) {
-            const device = userDeviceList[0]; // Pega apenas o primeiro dispositivo do usuário
-            let message = `Hora de fazer seu check-in diário! 🎯`;
+            const device = userDeviceList[0]; // Get only the first device from the user
+            let message = `Time to do your daily check-in! 🎯`;
             
             await sendPersonalizedNotification(
-                'Lembrete de Check-in ⏰',
+                'Check-in Reminder ⏰',
                 message,
                 device.userId,
                 'hourly_reminder'
@@ -322,8 +322,8 @@ const hourlyReminder = cron.schedule('0 * * * *', async () => {
 
 export function startScheduledNotifications() {
     console.log('✅ Scheduled notification service started');
-    console.log('📅 Notificações agendadas (Hora UK):');
-    console.log('- Notificações a cada hora');
+    console.log('📅 Scheduled notifications (UK time):');
+    console.log('- Notifications every hour');
     
     // Initialize notification tracker
     initializeNotificationTracker().then(() => {
