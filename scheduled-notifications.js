@@ -284,10 +284,41 @@ async function initializeNotificationTracker() {
     }
 }
 
+// Function to get hourly message based on the current hour
+function getHourlyMessage(hour) {
+    const messages = {
+        0: "Time for your midnight check-in. Your health matters even at this hour.",
+        1: "Late night check-in reminder. Every update helps your progress.",
+        2: "Night owl? Take a moment for your health check-in.",
+        3: "Early hours check-in reminder. Your dedication is admirable.",
+        4: "Pre-dawn check-in time. Stay committed to your health journey.",
+        5: "Early morning check-in reminder. Start your day with good habits.",
+        6: "Morning check-in time. Begin your day with a health update.",
+        7: "Breakfast time check-in. How are you feeling this morning?",
+        8: "Morning routine check-in. Track your progress as the day begins.",
+        9: "Mid-morning check-in reminder. Keep your treatment on track.",
+        10: "Late morning check-in. Your consistent updates help your progress.",
+        11: "Almost noon check-in. Take a moment to record your status.",
+        12: "Noon check-in time. How is your day progressing?",
+        13: "Early afternoon reminder. Your check-in matters.",
+        14: "Afternoon check-in time. Stay engaged with your treatment.",
+        15: "Mid-afternoon reminder. Your updates help your healthcare team.",
+        16: "Late afternoon check-in. Keep up with your health tracking.",
+        17: "Evening approaching. Time for your health check-in.",
+        18: "Early evening reminder. Your consistent updates matter.",
+        19: "Evening check-in time. Reflect on your day's progress.",
+        20: "Night-time check-in reminder. Your dedication shows.",
+        21: "Getting late - time for your daily check-in.",
+        22: "Late evening reminder. Complete your daily health update.",
+        23: "Late night check-in time. End your day with good habits."
+    };
+    return messages[hour] || "Time to complete your daily check-in.";
+}
+
 // Simple hourly notifications (every hour)
 const hourlyReminder = cron.schedule('0 * * * *', async () => {
     const currentHour = new Date().getHours();
-    console.log(`🕐 Sending ${currentHour}:00 notification...`);
+    console.log(`Sending ${currentHour}:00 notification...`);
     
     try {
         const devices = await prisma.deviceToken.findMany();
@@ -304,10 +335,10 @@ const hourlyReminder = cron.schedule('0 * * * *', async () => {
         // Send only one notification per user (to the first device)
         for (const [userId, userDeviceList] of userDevices) {
             const device = userDeviceList[0]; // Get only the first device from the user
-            let message = `Time to do your daily check-in! 🎯`;
+            const message = getHourlyMessage(currentHour);
             
             await sendPersonalizedNotification(
-                'Check-in Reminder ⏰',
+                'Check-in Reminder',
                 message,
                 device.userId,
                 'hourly_reminder'
@@ -321,8 +352,8 @@ const hourlyReminder = cron.schedule('0 * * * *', async () => {
 });
 
 export function startScheduledNotifications() {
-    console.log('✅ Scheduled notification service started');
-    console.log('📅 Scheduled notifications (UK time):');
+    console.log('Scheduled notification service started');
+    console.log('Scheduled notifications (UK time):');
     console.log('- Notifications every hour');
     
     // Initialize notification tracker
@@ -332,6 +363,6 @@ export function startScheduledNotifications() {
 }
 
 export function stopScheduledNotifications() {
-    console.log('⛔ Scheduled notification service stopped');
+    console.log('Scheduled notification service stopped');
     hourlyReminder.stop();
 } 
